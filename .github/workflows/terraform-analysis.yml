@@ -1,0 +1,15 @@
+name: Terraform analysis
+
+# Reemplaza a .cicd/azure-pipelines-analysis.yml (extends: terraform/init_analysis.yml).
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    name: Analysis
+    uses: robmau101295/lab-tpl-do-pipeline-infrastructure-devops/.github/workflows/terraform-init-analysis.yml@v1.0.0
