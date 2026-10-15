@@ -1,0 +1,42 @@
+name: Terraform R1
+run-name: R1 - ${{ inputs.environment || 'default' }} - ${{ github.ref_name }}
+
+# Reemplaza a .cicd/azure-pipelines-r1.yml (extends: terraform/init_spoke.yml).
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - README.md
+      - .github/workflows/legacy-simulado.yml
+  push:
+    branches: [main]
+    paths-ignore:
+      - README.md
+      - .github/workflows/legacy-simulado.yml
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Ambiente
+        type: choice
+        options: [default, dev, qa, pdn]
+        default: default
+
+permissions:
+  contents: read
+  id-token: write
+
+# Un solo run de Terraform a la vez en este repo (el lock de S3 protege el state, esto protege el orden).
+concurrency:
+  group: terraform-r1
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform
+    uses: robmau101295/lab-tpl-do-pipeline-infrastructure-devops/.github/workflows/terraform-init-spoke.yml@v1.0.0
+    with:
+      environment: ${{ inputs.environment || 'default' }}
+      terraform-init-args: '["-backend-config=config/r1/backend.hcl"]'
+      terraform-plan-args: '["-var-file=config/across/ssm.tfvars"]'
+    secrets: inherit
