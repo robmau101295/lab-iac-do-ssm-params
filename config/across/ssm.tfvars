@@ -1,7 +1,7 @@
 environment = "#{ENVIRONMENT}#"
 
 settings = {
-  greeting  = "hola desde #{ENVIRONMENT}#"
+  greeting  = "hola v2 desde #{ENVIRONMENT}#"
   log-level = "#{LOG_LEVEL}#"
 }
 
