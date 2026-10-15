@@ -1,0 +1,85 @@
+name: Legacy simulado (pipeline de Azure)
+
+# SIMULA el pipeline viejo de Azure DevOps para el laboratorio:
+#   - los valores vienen de "variable groups" (aquí: secretos de REPO con prefijo LEGACY_)
+#   - plan + apply directo, sin environments de GitHub
+#   - versión de Terraform configurable (en Deuna: la imagen del contenedor, 1.6.5 en la v3.0.0)
+# Sirve para crear el "estado de antes de la migración" y para practicar el rollback.
+# Usa el MISMO backend y los MISMOS workspaces que el workflow nuevo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, qa, pdn]
+        default: dev
+      terraform-version:
+        type: string
+        default: 1.12.0
+      apply:
+        description: Aplicar (false = solo plan, para revisar antes de un rollback)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-r1
+  cancel-in-progress: false
+
+jobs:
+  legacy:
+    name: Legacy [ ${{ inputs.environment }} ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ inputs.terraform-version }}
+          terraform_wrapper: false
+
+      - name: Get AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      # El "variable group" de cada ambiente.
+      - name: Inject tokens (como replacetokens@5)
+        run: |
+          case "${ENVIRONMENT}" in
+            dev) log_level="debug"; db_password="${LEGACY_DB_PASSWORD_DEV}" ;;
+            qa)  log_level="info";  db_password="${LEGACY_DB_PASSWORD_QA}" ;;
+            pdn) log_level="warn";  db_password="${LEGACY_DB_PASSWORD_PDN}" ;;
+          esac
+          sed -i \
+            -e "s|#{ENVIRONMENT}#|${ENVIRONMENT}|g" \
+            -e "s|#{LOG_LEVEL}#|${log_level}|g" \
+            -e "s|#{DB_PASSWORD}#|${db_password}|g" \
+            config/across/ssm.tfvars
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          LEGACY_DB_PASSWORD_DEV: ${{ secrets.LEGACY_DB_PASSWORD_DEV }}
+          LEGACY_DB_PASSWORD_PDN: ${{ secrets.LEGACY_DB_PASSWORD_PDN }}
+          LEGACY_DB_PASSWORD_QA: ${{ secrets.LEGACY_DB_PASSWORD_QA }}
+
+      - name: Init
+        run: terraform init -input=false -backend-config=config/r1/backend.hcl
+
+      - name: Select workspace
+        run: terraform workspace select -or-create "${{ inputs.environment }}"
+
+      - name: Plan
+        run: terraform plan -input=false -var-file=config/across/ssm.tfvars -out plan.tfplan
+
+      - name: Apply
+        if: inputs.apply
+        run: terraform apply -input=false -auto-approve plan.tfplan
