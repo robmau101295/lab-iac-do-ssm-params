@@ -57,7 +57,7 @@ jobs:
         run: |
           case "${ENVIRONMENT}" in
             dev) log_level="debug"; db_password="${LEGACY_DB_PASSWORD_DEV}" ;;
-            qa)  log_level="info";  db_password="${LEGACY_DB_PASSWORD_QA}" ;;
+            qa)  log_level="debug";  db_password="${LEGACY_DB_PASSWORD_QA}" ;;
             pdn) log_level="warn";  db_password="${LEGACY_DB_PASSWORD_PDN}" ;;
           esac
           sed -i \
